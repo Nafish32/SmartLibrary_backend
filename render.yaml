@@ -31,5 +31,5 @@ services:
       - key: ADMIN_REGISTRATION_KEY
         value: admin
       - key: CORS_ALLOWED_ORIGINS
-        value: https://your-frontend-app.vercel.app
+        value: https://smart-library-frontend-delta.vercel.app/
     plan: starter
