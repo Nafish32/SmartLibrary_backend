@@ -6,11 +6,7 @@ WORKDIR /app
 
 # Copy Maven wrapper and pom.xml first for better caching
 COPY mvnw .
-COPY mvnw.cmd .
 COPY pom.xml .
-
-# Copy .mvn directory
-COPY .mvn .mvn
 
 # Make mvnw executable
 RUN chmod +x ./mvnw
