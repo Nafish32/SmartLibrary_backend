@@ -64,6 +64,7 @@ public class SecurityConfig {
             .csrf(csrf-> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(authz -> authz
+                .requestMatchers("/", "/health").permitAll()
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/api/user/books/available", "/api/user/books/search", "/api/user/books/{id}", "/api/user/chat").permitAll()
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
