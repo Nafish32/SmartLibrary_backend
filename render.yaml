@@ -7,7 +7,7 @@ services:
     healthCheckPath: /actuator/health
     envVars:
       - key: DATABASE_URL
-        value: postgresql://admin:zijcqvovFrGl0ShF2wrlgOMeMbywjGUH@dpg-d3dfpd3ipnbc73cambpg-a.oregon-postgres.render.com/smartlibrary_z6wv
+        value: jdbc:postgresql://dpg-d3dfpd3ipnbc73cambpg-a.oregon-postgres.render.com:5432/smartlibrary_z6wv
       - key: DB_HOST
         value: dpg-d3dfpd3ipnbc73cambpg-a.oregon-postgres.render.com
       - key: DB_PORT
