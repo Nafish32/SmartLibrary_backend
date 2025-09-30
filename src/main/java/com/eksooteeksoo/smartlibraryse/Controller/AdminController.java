@@ -74,6 +74,7 @@ public class AdminController {
         BookDTO bookDTO = new BookDTO();
         bookDTO.setTitle(book.getTitle());
         bookDTO.setAuthor(book.getAuthor());
+        bookDTO.setAuthorBengali(book.getAuthorBengali());
         bookDTO.setPublishedYear(book.getPublishedYear());
         bookDTO.setQuantity(quantity);
         bookDTO.setIsbn(book.getIsbn());

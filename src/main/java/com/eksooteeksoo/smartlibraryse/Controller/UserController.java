@@ -16,7 +16,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @RestController
@@ -68,6 +70,39 @@ public class UserController {
         logger.debug("Processing AI chat request in language: {}", chatRequest.getLanguage());
         ChatResponse response = aiService.processChat(chatRequest);
         return ResponseEntity.ok(response);
+    }
+
+    // AI-assisted booking endpoint
+    @PostMapping("/chat/book")
+    public ResponseEntity<?> bookFromChat(@Valid @RequestBody BookBookingDTO bookingDTO,
+                                         Authentication authentication) {
+        try {
+            String username = authentication.getName();
+            logger.info("User {} booking book from chat with id: {}", username, bookingDTO.getBookId());
+            BookBooking booking = userService.bookBook(username, bookingDTO);
+
+            // Return success response with multilingual message
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("booking", new BookBookingResponseDTO(booking));
+            response.put("message", Map.of(
+                "en", "Book successfully booked! You can view your bookings in the 'My Bookings' section.",
+                "bn", "বইটি সফলভাবে বুক করা হয়েছে! আপনি 'আমার বুকিং' বিভাগে আপনার বুকিংগুলি দেখতে পারেন।",
+                "mixed", "Book successfully বুক করা হয়েছে! আপনি 'My Bookings' এ দেখতে পারেন।"
+            ));
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            logger.error("Error booking book from chat", e);
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("error", e.getMessage());
+            errorResponse.put("message", Map.of(
+                "en", "Failed to book the book: " + e.getMessage(),
+                "bn", "বইটি বুক করতে ব্যর্থ: " + e.getMessage(),
+                "mixed", "Book বুক করতে failed: " + e.getMessage()
+            ));
+            return ResponseEntity.badRequest().body(errorResponse);
+        }
     }
 
     // Authenticated user endpoints

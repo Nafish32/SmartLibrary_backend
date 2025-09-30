@@ -21,6 +21,9 @@ public class Book {
     @Column(nullable = false)
     private String author;
 
+    @Column(name = "author_bengali")
+    private String authorBengali;
+
     @Column(nullable = false)
     private int publishedYear;
 
