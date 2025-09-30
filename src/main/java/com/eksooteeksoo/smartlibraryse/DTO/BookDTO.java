@@ -15,6 +15,8 @@ public class BookDTO {
     @NotBlank(message = "Author is required")
     private String author;
 
+    private String authorBengali;
+
     @NotNull(message = "Published year is required")
     @Min(value = 1000, message = "Published year should be valid")
     private Integer publishedYear;

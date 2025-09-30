@@ -83,6 +83,7 @@ public class BookServiceImpl implements BookService {
     private void updateBookFromDto(Book book, BookDTO bookDTO) {
         book.setTitle(bookDTO.getTitle());
         book.setAuthor(bookDTO.getAuthor());
+        book.setAuthorBengali(bookDTO.getAuthorBengali());
         book.setPublishedYear(bookDTO.getPublishedYear());
         book.setQuantity(bookDTO.getQuantity());
         book.setIsbn(bookDTO.getIsbn());

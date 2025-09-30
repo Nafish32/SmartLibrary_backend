@@ -14,6 +14,8 @@ public class ChatResponse {
     private String error;
     private List<Book> books; // Added for book search results
     private String responseType; // "text" or "books"
+    private boolean allowBooking; // New field to indicate if booking is available
+    private String bookingMessage; // Message about booking availability
 
     public ChatResponse(String response) {
         this.response = response;
@@ -21,6 +23,8 @@ public class ChatResponse {
         this.error = null;
         this.books = null;
         this.responseType = "text";
+        this.allowBooking = false;
+        this.bookingMessage = null;
     }
     
     public ChatResponse(List<Book> books, String responseMessage) {
@@ -29,9 +33,11 @@ public class ChatResponse {
         this.error = null;
         this.books = books;
         this.responseType = "books";
+        this.allowBooking = true;
+        this.bookingMessage = "You can book any of these books by clicking the 'Book Now' button.";
     }
 
     public static ChatResponse error(String error) {
-        return new ChatResponse(null, false, error, null, "error");
+        return new ChatResponse(null, false, error, null, "error", false, null);
     }
 }

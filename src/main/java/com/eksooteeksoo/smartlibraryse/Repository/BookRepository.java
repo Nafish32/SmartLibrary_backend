@@ -18,21 +18,38 @@ public interface BookRepository extends JpaRepository<Book, Long> {
     @Query("SELECT b FROM Book b WHERE b.quantity > 0 AND " +
            "(LOWER(b.title) LIKE LOWER(CONCAT('%', :searchTerm, '%')) OR " +
            "LOWER(b.author) LIKE LOWER(CONCAT('%', :searchTerm, '%')) OR " +
+           "LOWER(COALESCE(b.authorBengali, '')) LIKE LOWER(CONCAT('%', :searchTerm, '%')) OR " +
            "LOWER(b.genre) LIKE LOWER(CONCAT('%', :searchTerm, '%')))")
     List<Book> searchAvailableBooks(@Param("searchTerm") String searchTerm);
 
+    // Simple native query for multiple genre search (AND logic)
+    @Query(value = "SELECT * FROM books WHERE quantity > 0 AND " +
+           "(:genre1 IS NULL OR LOWER(genre) LIKE LOWER(CONCAT('%', :genre1, '%'))) AND " +
+           "(:genre2 IS NULL OR LOWER(genre) LIKE LOWER(CONCAT('%', :genre2, '%'))) AND " +
+           "(:genre3 IS NULL OR LOWER(genre) LIKE LOWER(CONCAT('%', :genre3, '%')))",
+           nativeQuery = true)
+    List<Book> findBooksContainingAllGenres(@Param("genre1") String genre1,
+                                           @Param("genre2") String genre2,
+                                           @Param("genre3") String genre3);
+
     List<Book> findByTitleContainingIgnoreCaseAndQuantityGreaterThan(String title, int quantity);
-    List<Book> findByAuthorContainingIgnoreCaseAndQuantityGreaterThan(String author, int quantity);
+
+    @Query("SELECT b FROM Book b WHERE b.quantity > :quantity AND " +
+           "(LOWER(b.author) LIKE LOWER(CONCAT('%', :author, '%')) OR " +
+           "LOWER(COALESCE(b.authorBengali, '')) LIKE LOWER(CONCAT('%', :author, '%')))")
+    List<Book> findByAuthorContainingIgnoreCaseAndQuantityGreaterThan(@Param("author") String author, @Param("quantity") int quantity);
+
     List<Book> findByGenreContainingIgnoreCaseAndQuantityGreaterThan(String genre, int quantity);
     List<Book> findByPublishedYearAndQuantityGreaterThan(int publishedYear, int quantity);
     List<Book> findByDescriptionContainingIgnoreCaseAndQuantityGreaterThan(String description, int quantity);
     List<Book> findByTitleContainingIgnoreCaseAndDescriptionContainingIgnoreCaseAndQuantityGreaterThan(
         String title, String description, int quantity);
 
-    // Advanced search method with multiple filters
+    // Advanced search method with multiple filters including bilingual author support
     @Query("SELECT DISTINCT b FROM Book b WHERE b.quantity > 0 AND " +
            "(:title IS NULL OR LOWER(b.title) LIKE LOWER(CONCAT('%', :title, '%'))) AND " +
-           "(:author IS NULL OR LOWER(b.author) LIKE LOWER(CONCAT('%', :author, '%'))) AND " +
+           "(:author IS NULL OR LOWER(b.author) LIKE LOWER(CONCAT('%', :author, '%')) OR " +
+           "LOWER(COALESCE(b.authorBengali, '')) LIKE LOWER(CONCAT('%', :author, '%'))) AND " +
            "(:genre IS NULL OR LOWER(b.genre) LIKE LOWER(CONCAT('%', :genre, '%'))) AND " +
            "(:yearFrom IS NULL OR b.publishedYear >= :yearFrom) AND " +
            "(:yearTo IS NULL OR b.publishedYear <= :yearTo) AND " +

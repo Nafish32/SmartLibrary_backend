@@ -145,27 +145,47 @@ public class AIServiceImpl implements AIService {
             }
         }
 
-        // Priority 5: Year-based search (if no exact matches found)
+        // Priority 5: Combined Genre + Year search (most common use case)
+        if (!foundExactMatches && criteria.getGenres() != null && !criteria.getGenres().isEmpty()) {
+            String operation = criteria.getGenreSearchOperation();
+            List<Book> genreBooks;
+
+            if ("AND".equalsIgnoreCase(operation)) {
+                // User wants books that contain ALL specified genres
+                genreBooks = searchBooksWithAllGenres(criteria.getGenres());
+                logger.info("Using AND logic for genres: {}", criteria.getGenres());
+            } else {
+                // User wants books that contain ANY of the specified genres (OR logic)
+                genreBooks = searchBooksWithAnyGenre(criteria.getGenres());
+                logger.info("Using OR logic for genres: {}", criteria.getGenres());
+            }
+
+            // Apply year filter to genre results if specified
+            if (criteria.getYearFrom() != null || criteria.getYearTo() != null) {
+                genreBooks = genreBooks.stream()
+                        .filter(book -> {
+                            if (criteria.getYearFrom() != null && book.getPublishedYear() < criteria.getYearFrom()) {
+                                return false;
+                            }
+                            return criteria.getYearTo() == null || book.getPublishedYear() <= criteria.getYearTo();
+                        })
+                        .toList();
+            }
+
+            resultBooks.addAll(genreBooks);
+            foundExactMatches = true;
+        }
+
+        // Priority 6: Year-only search (only if no genres specified)
         if (!foundExactMatches && (criteria.getYearFrom() != null || criteria.getYearTo() != null)) {
             List<Book> yearBooks = searchByYear(criteria.getYearFrom(), criteria.getYearTo());
             resultBooks.addAll(yearBooks);
         }
 
-        // Priority 6: Genre search (only if no specific matches found and minimal other criteria)
-        if (!foundExactMatches && criteria.getGenres() != null && !criteria.getGenres().isEmpty() &&
-            (criteria.getTitles() == null || criteria.getTitles().isEmpty()) &&
-            (criteria.getAuthors() == null || criteria.getAuthors().isEmpty())) {
-
-            for (String genre : criteria.getGenres()) {
-                List<Book> genreBooks = bookRepository.findByGenreContainingIgnoreCaseAndQuantityGreaterThan(genre, 0);
-                resultBooks.addAll(genreBooks.stream().limit(5).toList()); // Limit genre results to avoid too many
-            }
-        }
-
         return new ArrayList<>(resultBooks);
     }
 
-    // Multilingual author name mappings
+    // Multilingual author name mappings - Enhanced with both directions
     private final Map<String, List<String>> authorNameMappings = createAuthorNameMappings();
 
     private Map<String, List<String>> createAuthorNameMappings() {
@@ -173,30 +193,42 @@ public class AIServiceImpl implements AIService {
 
         // Common Bangla authors and their English transliterations
         mappings.put("জে.কে. রোলিং", List.of("j.k. rowling", "jk rowling", "joanne rowling", "rowling"));
-        mappings.put("রবীন্দ্রনাথ ঠাকুর", List.of("rabindranath tagore", "tagore", "rabindranath thakur"));
-        mappings.put("কাজী নজরুল ইসলাম", List.of("kazi nazrul islam", "nazrul islam", "nazrul"));
-        mappings.put("শরৎচন্দ্র চট্টোপাধ্যায়", List.of("sarat chandra chattopadhyay", "sharatchandra", "sarat chandra"));
-        mappings.put("বঙ্কিমচন্দ্র চট্টোপাধ্যায়", List.of("bankim chandra chattopadhyay", "bankim chandra", "bankimchandra"));
-        mappings.put("হুমায়ূন আহমেদ", List.of("humayun ahmed", "humayun ahmad"));
+        mappings.put("j.k. rowling", List.of("জে.কে. রোলিং", "জোয়ান রোলিং"));
+
+        mappings.put("রবীন্দ্রনাথ ঠাকুর", List.of("rabindranath tagore", "tagore", "rabindranath thakur", "রবি ঠাকুর", "রবীন্দ্রনাথ"));
+        mappings.put("rabindranath tagore", List.of("রবীন্দ্রনাথ ঠাকুর", "রবি ঠাকুর"));
+        mappings.put("রবি", List.of("rabindranath tagore", "রবীন্দ্রনাথ ঠাকুর", "রবি ঠাকুর"));
+
+        mappings.put("কাজী নজরুল ইসলাম", List.of("kazi nazrul islam", "nazrul islam", "nazrul", "নজরুল"));
+        mappings.put("nazrul", List.of("কাজী নজরুল ইসলাম", "নজরুল"));
+        mappings.put("নজরুল", List.of("kazi nazrul islam", "nazrul"));
+
+        mappings.put("শরৎচন্দ্র চট্টোপাধ্যায়", List.of("sarat chandra chattopadhyay", "sharatchandra", "sarat chandra", "শরৎচন্দ্র"));
+        mappings.put("sarat chandra", List.of("শরৎচন্দ্র চট্টোপাধ্যায়", "শরৎচন্দ্র"));
+        mappings.put("শরৎ", List.of("sarat chandra chattopadhyay", "শরৎচন্দ্র চট্টোপাধ্যায়"));
+
+        mappings.put("বঙ্কিমচন্দ্র চট্টোপাধ্যায়", List.of("bankim chandra chattopadhyay", "bankim chandra", "bankimchandra", "বঙ্কিম"));
+        mappings.put("bankim chandra", List.of("বঙ্কিমচন্দ্র চট্টোপাধ্যায়", "বঙ্কিম"));
+        mappings.put("বঙ্কিম", List.of("bankim chandra chattopadhyay", "বঙ্কিমচন্দ্র চট্টোপাধ্যায়"));
+
+        mappings.put("হুমায়ূন আহমেদ", List.of("humayun ahmed", "humayun ahmad", "হুমায়ূন"));
+        mappings.put("humayun ahmed", List.of("হুমায়ূন আহমেদ", "হুমায়ূন"));
+        mappings.put("হুমায়ূন", List.of("humayun ahmed", "হুমায়ূন আহমেদ"));
+
         mappings.put("আহমদ ছফা", List.of("ahmad sofa", "ahmed sofa"));
+        mappings.put("ahmad sofa", List.of("আহমদ ছফা"));
+
         mappings.put("জহির রায়হান", List.of("zahir raihan", "jahir raihan"));
+        mappings.put("zahir raihan", List.of("জহির রায়হান"));
+
         mappings.put("শহীদুল জহির", List.of("shahidul jahir", "shahidul zahir"));
+        mappings.put("shahidul jahir", List.of("শহীদুল জহির"));
+
         mappings.put("আল মাহমুদ", List.of("al mahmud", "al-mahmud"));
+        mappings.put("al mahmud", List.of("আল মাহমুদ"));
+
         mappings.put("আনিসুল হক", List.of("anisul hoque", "anisul haq"));
-
-        // Add reverse mappings (English -> Bangla)
-        Map<String, List<String>> reverseMappings = new HashMap<>();
-        for (Map.Entry<String, List<String>> entry : mappings.entrySet()) {
-            String banglaName = entry.getKey();
-            for (String englishVariation : entry.getValue()) {
-                reverseMappings.computeIfAbsent(englishVariation.toLowerCase(), k -> new ArrayList<>()).add(banglaName);
-            }
-        }
-
-        // Merge reverse mappings
-        for (Map.Entry<String, List<String>> entry : reverseMappings.entrySet()) {
-            mappings.put(entry.getKey(), entry.getValue());
-        }
+        mappings.put("anisul hoque", List.of("আনিসুল হক"));
 
         return mappings;
     }
@@ -385,5 +417,53 @@ public class AIServiceImpl implements AIService {
             "দুঃখিত, কিছু সমস্যা হয়েছে। আবার চেষ্টা করুন।",
             "Sorry, something went wrong. Please try again.",
             "দুঃখিত, কিছু problem হয়েছে। আবার try করুন।");
+    }
+
+    /**
+     * Search for books that contain ALL specified genres (AND logic)
+     * This method ensures that returned books have all the genres mentioned in the search
+     */
+    private List<Book> searchBooksWithAllGenres(List<String> genres) {
+        if (genres == null || genres.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        // Start with books that contain the first genre
+        List<Book> candidateBooks = bookRepository.findByGenreContainingIgnoreCaseAndQuantityGreaterThan(genres.get(0), 0);
+
+        // Filter books to only those that contain ALL specified genres
+        return candidateBooks.stream()
+                .filter(book -> {
+                    String bookGenre = book.getGenre();
+                    if (bookGenre == null) return false;
+
+                    String bookGenreLower = bookGenre.toLowerCase();
+
+                    // Check if ALL genres are present in this book's genre field
+                    return genres.stream().allMatch(genre ->
+                        bookGenreLower.contains(genre.toLowerCase())
+                    );
+                })
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Search for books that contain ANY of the specified genres (OR logic)
+     * This method ensures that returned books have at least one of the genres mentioned in the search
+     */
+    private List<Book> searchBooksWithAnyGenre(List<String> genres) {
+        if (genres == null || genres.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        Set<Book> resultBooks = new HashSet<>();
+
+        // Find books that contain ANY of the specified genres
+        for (String genre : genres) {
+            List<Book> genreBooks = bookRepository.findByGenreContainingIgnoreCaseAndQuantityGreaterThan(genre, 0);
+            resultBooks.addAll(genreBooks);
+        }
+
+        return new ArrayList<>(resultBooks);
     }
 }

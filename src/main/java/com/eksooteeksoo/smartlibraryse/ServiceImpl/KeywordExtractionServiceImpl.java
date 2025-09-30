@@ -94,34 +94,114 @@ public class KeywordExtractionServiceImpl implements KeywordExtractionService {
 
     private String buildPrompt(String userMessage) {
         return """
-            Extract book search criteria from the user message. Respond ONLY with a JSON object containing these fields:
+            You are an advanced book search AI agent. Extract comprehensive book search criteria from the user message. 
+            Respond ONLY with a JSON object containing these fields:
             {
                 "titles": [exact book titles or series names mentioned - be very specific],
-                "authors": [exact author names mentioned],
+                "authors": [exact author names mentioned in ANY language including Bengali/Bangla],
                 "genres": [specific genres like fiction, romance, mystery, etc.],
                 "keywords": [other relevant keywords for general search],
                 "yearFrom": number or null (earliest publication year),
                 "yearTo": number or null (latest publication year),
                 "isbn": "string or null",
-                "descriptionKeywords": [specific keywords that should be searched in book descriptions]
+                "descriptionKeywords": [specific keywords that should be searched in book descriptions],
+                "genreSearchOperation": "AND" or "OR" (determine user intent for multiple genres),
+                "exactTitleMatch": boolean (true if user wants exact title match),
+                "partialTitleMatch": boolean (true if partial matching is acceptable),
+                "exactAuthorMatch": boolean (true if user wants exact author match),
+                "partialAuthorMatch": boolean (true if partial matching is acceptable),
+                "maxResults": number (1-100, default 50),
+                "sortBy": "relevance" | "title" | "author" | "year" | "popularity",
+                "sortOrder": "asc" | "desc",
+                "includeOutOfStock": boolean (whether to include books with 0 quantity),
+                "excludeGenres": [genres to exclude from results],
+                "excludeAuthors": [authors to exclude from results],
+                "searchMode": "smart" | "strict" | "fuzzy",
+                "prioritizeRecentBooks": boolean,
+                "prioritizePopularBooks": boolean,
+                "language": "english" | "bengali" | "any",
+                "requiredKeywords": [keywords that MUST be present],
+                "optionalKeywords": [keywords that boost relevance if present],
+                "userIntent": "general" | "specific" | "browsing" | "research"
             }
 
-            IMPORTANT RULES:
-            1. For book series (like "Harry Potter", "Lord of the Rings"), put the series name in titles array
-            2. If user asks about "third book" or "second book" etc., put words like "third", "second" in descriptionKeywords
-            3. Be very specific with titles - don't add generic terms to titles array
-            4. Only put confirmed author names in authors array
-            5. For questions about availability of specific books, focus on title and description keywords
-            6. Extract years from phrases like "published in 1990", "between 1980-2000", "after 1995", "before 2010"
-            7. Common genres: fiction, non-fiction, romance, mystery, thriller, science-fiction, fantasy, biography, history, self-help, education, children, poetry, drama, programming, technology, business, science, health, art
+            ADVANCED AGENT RULES:
+            
+            1. INTENT DETECTION:
+               - "specific": User looking for exact book/author (use exactMatch=true)
+               - "browsing": User exploring options (use fuzzy search, higher maxResults)
+               - "research": Academic/detailed search (prioritize recent books, strict mode)
+               - "general": Default casual search
+            
+            2. SEARCH MODE DETECTION:
+               - "strict": User uses quotes, says "exactly", "precisely"
+               - "fuzzy": User says "similar", "like", "something like"
+               - "smart": Default intelligent search
+            
+            3. EDGE CASE HANDLING:
+               - Ambiguous titles: Set partialTitleMatch=true, add title variations to optionalKeywords
+               - Multiple authors: Check if user wants books by ALL authors (AND) or ANY author (OR)
+               - Typos/misspellings: Use fuzzy mode, add corrected terms to optionalKeywords
+               - Incomplete information: Fill gaps with smart defaults based on context
+               - Contradictory requests: Prioritize most recent/specific instruction
+               
+            4. QUANTITY & SORTING:
+               - If user asks for "few" books: maxResults=10
+               - If user asks for "many" books: maxResults=100
+               - If user asks for "latest" books: sortBy="year", sortOrder="desc", prioritizeRecentBooks=true
+               - If user asks for "popular" books: sortBy="popularity", prioritizePopularBooks=true, maxResults=10
+               - If user asks for "best" books: sortBy="relevance", prioritizePopularBooks=true
+               
+            5. EXCLUSION HANDLING:
+               - "not romance": add "romance" to excludeGenres
+               - "except John Doe": add "John Doe" to excludeAuthors  
+               - "avoid": add terms to appropriate exclude arrays
+               
+            6. LANGUAGE DETECTION:
+               - Detect predominant language in query
+               - If mixed language, set language="any"
+               - If only English terms: language="english" 
+               - If only Bengali terms: language="bengali"
+               
+            7. AVAILABILITY PREFERENCES:
+               - Default: includeOutOfStock=false (only available books)
+               - If user says "any books" or "all books": includeOutOfStock=true
+               - If user says "available now": includeOutOfStock=false (explicit)
+               
+            8. COMPOUND QUERIES:
+               - Break down complex multi-part queries
+               - Identify primary vs secondary criteria
+               - Use requiredKeywords for primary, optionalKeywords for secondary
+               
+            9. TEMPORAL CONTEXT:
+               - "recent": last 5 years, prioritizeRecentBooks=true
+               - "classic": before 1980, sortBy="year", sortOrder="asc"
+               - "modern": after 2000
+               - "contemporary": after 2010
 
-            Examples:
-            - "harry potter books" → titles: ["Harry Potter"], authors: [], genres: [], keywords: []
-            - "third harry potter book" → titles: ["Harry Potter"], descriptionKeywords: ["third"]
-            - "books by J.K. Rowling" → authors: ["J.K. Rowling"], titles: [], genres: [], keywords: []
-            - "fantasy books after 2000" → genres: ["fantasy"], yearFrom: 2000
-            - "books about programming" → genres: ["programming"], keywords: ["programming"]
-            - "Is the third book of harry potter available?" → titles: ["Harry Potter"], descriptionKeywords: ["third"]
+            GENRE SEARCH OPERATION RULES:
+            - Use "AND" when user says: "both X and Y", "X and Y", "with both", "containing all", "must have both"
+            - Use "OR" when user says: "X or Y", "either X or Y", "X অথবা Y", "any of these", "one of"
+            - Default to "OR" if unclear or single genre mentioned
+            - Bengali AND indicators: "এবং", "আর", "ও", "উভয়", "দুটোই"
+            - Bengali OR indicators: "অথবা", "বা", "কিংবা", "যেকোনো"
+
+            EXAMPLE EDGE CASES:
+            
+            "I want the exact book 'To Kill a Mockingbird'" →
+            exactTitleMatch: true, userIntent: "specific", searchMode: "strict"
+            
+            "Show me something like Harry Potter but not fantasy" →
+            partialTitleMatch: true, searchMode: "fuzzy", excludeGenres: ["fantasy"]
+            
+            "Latest popular science fiction books, at least 10" →
+            genres: ["science-fiction"], sortBy: "year", prioritizeRecentBooks: true, prioritizePopularBooks: true, maxResults: 10
+            
+            "Books by Rabindranath Tagore or রবীন্দ্রনাথ ঠাকুর except poetry" →
+            authors: ["Rabindranath Tagore", "রবীন্দ্রনাথ ঠাকুর"], excludeGenres: ["poetry"], language: "any"
+            
+            "I need research materials on AI, published after 2020, available now" →
+            keywords: ["AI", "artificial intelligence"], yearFrom: 2020, userIntent: "research", includeOutOfStock: false, prioritizeRecentBooks: true
 
             User message: """ + userMessage;
     }
@@ -150,6 +230,25 @@ public class KeywordExtractionServiceImpl implements KeywordExtractionService {
                         .yearTo(extractInteger(criteriaNode, "yearTo"))
                         .isbn(extractString(criteriaNode, "isbn"))
                         .descriptionKeywords(extractStringList(criteriaNode, "descriptionKeywords"))
+                        .genreSearchOperation(extractString(criteriaNode, "genreSearchOperation"))
+                        // Advanced agent-like fields
+                        .exactTitleMatch(extractBoolean(criteriaNode, "exactTitleMatch"))
+                        .partialTitleMatch(extractBoolean(criteriaNode, "partialTitleMatch"))
+                        .exactAuthorMatch(extractBoolean(criteriaNode, "exactAuthorMatch"))
+                        .partialAuthorMatch(extractBoolean(criteriaNode, "partialAuthorMatch"))
+                        .maxResults(extractInteger(criteriaNode, "maxResults"))
+                        .sortBy(extractString(criteriaNode, "sortBy"))
+                        .sortOrder(extractString(criteriaNode, "sortOrder"))
+                        .includeOutOfStock(extractBoolean(criteriaNode, "includeOutOfStock"))
+                        .excludeGenres(extractStringList(criteriaNode, "excludeGenres"))
+                        .excludeAuthors(extractStringList(criteriaNode, "excludeAuthors"))
+                        .searchMode(extractString(criteriaNode, "searchMode"))
+                        .prioritizeRecentBooks(extractBoolean(criteriaNode, "prioritizeRecentBooks"))
+                        .prioritizePopularBooks(extractBoolean(criteriaNode, "prioritizePopularBooks"))
+                        .language(extractString(criteriaNode, "language"))
+                        .requiredKeywords(extractStringList(criteriaNode, "requiredKeywords"))
+                        .optionalKeywords(extractStringList(criteriaNode, "optionalKeywords"))
+                        .userIntent(extractString(criteriaNode, "userIntent"))
                         .build();
                 }
             }
@@ -203,6 +302,14 @@ public class KeywordExtractionServiceImpl implements KeywordExtractionService {
         return null;
     }
 
+    private Boolean extractBoolean(JsonNode node, String fieldName) {
+        JsonNode fieldNode = node.get(fieldName);
+        if (fieldNode != null && fieldNode.isBoolean()) {
+            return fieldNode.asBoolean();
+        }
+        return null;
+    }
+
     private BookSearchCriteria extractWithRules(String userMessage) {
         String cleanMessage = userMessage.toLowerCase().trim();
 
@@ -214,6 +321,10 @@ public class KeywordExtractionServiceImpl implements KeywordExtractionService {
         // Extract common genres
         extractGenres(cleanMessage, builder);
 
+        // Detect genre search operation (AND vs OR)
+        String genreOperation = detectGenreSearchOperation(userMessage);
+        builder.genreSearchOperation(genreOperation);
+
         // Extract general keywords
         List<String> keywords = extractGeneralKeywords(cleanMessage);
         builder.keywords(keywords);
@@ -221,22 +332,271 @@ public class KeywordExtractionServiceImpl implements KeywordExtractionService {
         // Use same keywords for description search
         builder.descriptionKeywords(new ArrayList<>(keywords));
 
+        // Agent-like enhancements for rule-based extraction
+        detectUserIntent(userMessage, builder);
+        detectSearchMode(userMessage, builder);
+        detectSortingPreferences(userMessage, builder);
+        detectExclusions(userMessage, builder);
+        detectLanguagePreference(userMessage, builder);
+        detectAvailabilityPreferences(userMessage, builder);
+        detectQuantityPreferences(userMessage, builder);
+
         return builder.build();
     }
 
-    private void extractYears(String message, BookSearchCriteria.BookSearchCriteriaBuilder builder) {
-        // Patterns for different year formats
-        Pattern[] yearPatterns = {
-            Pattern.compile("\\b(\\d{4})\\s*[-–—to]\\s*(\\d{4})\\b"),  // 1990-2000
-            Pattern.compile("between\\s+(\\d{4})\\s+and\\s+(\\d{4})"),   // between 1990 and 2000
-            Pattern.compile("after\\s+(\\d{4})"),                       // after 1990
-            Pattern.compile("before\\s+(\\d{4})"),                      // before 2000
-            Pattern.compile("in\\s+(\\d{4})"),                          // in 1995
-            Pattern.compile("\\b(\\d{4})\\b")                          // standalone year
+    /**
+     * Detect user intent from natural language patterns
+     */
+    private void detectUserIntent(String userMessage, BookSearchCriteria.BookSearchCriteriaBuilder builder) {
+        String message = userMessage.toLowerCase();
+
+        // Specific intent indicators
+        if (message.contains("exact") || message.contains("precisely") ||
+            message.contains("specific") || message.matches(".*\".*\".*")) {
+            builder.userIntent("specific");
+            builder.exactTitleMatch(true);
+            builder.exactAuthorMatch(true);
+            builder.searchMode("strict");
+        }
+        // Research intent indicators
+        else if (message.contains("research") || message.contains("study") ||
+                 message.contains("academic") || message.contains("paper") ||
+                 message.contains("thesis")) {
+            builder.userIntent("research");
+            builder.prioritizeRecentBooks(true);
+            builder.searchMode("strict");
+            builder.includeOutOfStock(true); // Researchers might want all books
+        }
+        // Browsing intent indicators
+        else if (message.contains("browse") || message.contains("explore") ||
+                 message.contains("discover") || message.contains("similar") ||
+                 message.contains("like")) {
+            builder.userIntent("browsing");
+            builder.searchMode("fuzzy");
+            builder.maxResults(75); // More results for browsing
+        }
+        // Default to general intent
+        else {
+            builder.userIntent("general");
+        }
+    }
+
+    /**
+     * Detect search mode from language patterns
+     */
+    private void detectSearchMode(String userMessage, BookSearchCriteria.BookSearchCriteriaBuilder builder) {
+        String message = userMessage.toLowerCase();
+
+        if (message.contains("exactly") || message.contains("precisely") ||
+            message.contains("strict") || message.matches(".*\".*\".*")) {
+            builder.searchMode("strict");
+        }
+        else if (message.contains("similar") || message.contains("like") ||
+                 message.contains("something like") || message.contains("fuzzy")) {
+            builder.searchMode("fuzzy");
+        }
+        else {
+            builder.searchMode("smart"); // Default
+        }
+    }
+
+    /**
+     * Detect sorting and prioritization preferences
+     */
+    private void detectSortingPreferences(String userMessage, BookSearchCriteria.BookSearchCriteriaBuilder builder) {
+        String message = userMessage.toLowerCase();
+
+        // Year-based sorting
+        if (message.contains("latest") || message.contains("newest") || message.contains("recent")) {
+            builder.sortBy("year");
+            builder.sortOrder("desc");
+            builder.prioritizeRecentBooks(true);
+        }
+        else if (message.contains("oldest") || message.contains("classic") || message.contains("vintage")) {
+            builder.sortBy("year");
+            builder.sortOrder("asc");
+        }
+        // Popularity-based sorting
+        else if (message.contains("popular") || message.contains("best") ||
+                 message.contains("top") || message.contains("famous")) {
+            builder.sortBy("popularity");
+            builder.prioritizePopularBooks(true);
+        }
+        // Title-based sorting
+        else if (message.contains("alphabetical") || message.contains("a to z") ||
+                 message.contains("z to a")) {
+            builder.sortBy("title");
+            builder.sortOrder(message.contains("z to a") ? "desc" : "asc");
+        }
+        // Author-based sorting
+        else if (message.contains("by author")) {
+            builder.sortBy("author");
+            builder.sortOrder("asc");
+        }
+        else {
+            builder.sortBy("relevance"); // Default
+            builder.sortOrder("desc");
+        }
+    }
+
+    /**
+     * Detect exclusion patterns
+     */
+    private void detectExclusions(String userMessage, BookSearchCriteria.BookSearchCriteriaBuilder builder) {
+        String message = userMessage.toLowerCase();
+        List<String> excludeGenres = new ArrayList<>();
+        List<String> excludeAuthors = new ArrayList<>();
+
+        // Common exclusion patterns
+        String[] exclusionPatterns = {
+            "not ", "except ", "but not ", "avoid ", "exclude ", "without "
         };
 
-        for (Pattern pattern : yearPatterns) {
-            Matcher matcher = pattern.matcher(message);
+        for (String pattern : exclusionPatterns) {
+            if (message.contains(pattern)) {
+                // Extract words following exclusion patterns
+                String[] words = message.split(pattern);
+                if (words.length > 1) {
+                    String exclusionPart = words[1].split("[,\\.]")[0].trim();
+
+                    // Check if it's a genre
+                    if (isGenre(exclusionPart)) {
+                        excludeGenres.add(exclusionPart);
+                    }
+                    // Check if it's an author (contains proper case or is a known author)
+                    else if (exclusionPart.matches(".*[A-Z].*") || isKnownAuthor(exclusionPart)) {
+                        excludeAuthors.add(exclusionPart);
+                    }
+                }
+            }
+        }
+
+        if (!excludeGenres.isEmpty()) builder.excludeGenres(excludeGenres);
+        if (!excludeAuthors.isEmpty()) builder.excludeAuthors(excludeAuthors);
+    }
+
+    /**
+     * Detect language preference
+     */
+    private void detectLanguagePreference(String userMessage, BookSearchCriteria.BookSearchCriteriaBuilder builder) {
+        boolean hasBengali = userMessage.matches(".*[\\u0980-\\u09FF].*");
+        boolean hasEnglish = userMessage.matches(".*[a-zA-Z].*");
+
+        if (hasBengali && hasEnglish) {
+            builder.language("any");
+        } else if (hasBengali) {
+            builder.language("bengali");
+        } else {
+            builder.language("english");
+        }
+    }
+
+    /**
+     * Detect availability preferences
+     */
+    private void detectAvailabilityPreferences(String userMessage, BookSearchCriteria.BookSearchCriteriaBuilder builder) {
+        String message = userMessage.toLowerCase();
+
+        if (message.contains("available now") || message.contains("in stock")) {
+            builder.includeOutOfStock(false);
+        }
+        else if (message.contains("any books") || message.contains("all books") ||
+                 message.contains("including unavailable")) {
+            builder.includeOutOfStock(true);
+        }
+        else {
+            builder.includeOutOfStock(false); // Default to available only
+        }
+    }
+
+    /**
+     * Detect quantity preferences
+     */
+    private void detectQuantityPreferences(String userMessage, BookSearchCriteria.BookSearchCriteriaBuilder builder) {
+        String message = userMessage.toLowerCase();
+
+        // Extract numeric quantities
+        if (message.matches(".*\\b(\\d+)\\s+(books?|results?).*")) {
+            java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("\\b(\\d+)\\s+(?:books?|results?)");
+            java.util.regex.Matcher matcher = pattern.matcher(message);
+            if (matcher.find()) {
+                int quantity = Integer.parseInt(matcher.group(1));
+                builder.maxResults(Math.min(quantity, 100)); // Cap at 100
+            }
+        }
+        // Qualitative quantities
+        else if (message.contains("few") || message.contains("some")) {
+            builder.maxResults(10);
+        }
+        else if (message.contains("many") || message.contains("lots") || message.contains("plenty")) {
+            builder.maxResults(100);
+        }
+        else if (message.contains("at least")) {
+            // Extract number after "at least"
+            java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("at least\\s+(\\d+)");
+            java.util.regex.Matcher matcher = pattern.matcher(message);
+            if (matcher.find()) {
+                int minQuantity = Integer.parseInt(matcher.group(1));
+                builder.maxResults(Math.max(minQuantity, 50));
+            }
+        }
+        else {
+            builder.maxResults(50); // Default
+        }
+    }
+
+    /**
+     * Helper method to check if a word is a genre
+     */
+    private boolean isGenre(String word) {
+        String[] commonGenres = {
+            "fiction", "romance", "mystery", "thriller", "fantasy", "science-fiction",
+            "biography", "history", "self-help", "children", "poetry", "drama",
+            "horror", "adventure", "comedy", "tragedy", "western", "crime"
+        };
+
+        for (String genre : commonGenres) {
+            if (genre.equalsIgnoreCase(word) || word.contains(genre)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Helper method to check if a word/phrase is a known author
+     */
+    private boolean isKnownAuthor(String phrase) {
+        String[] knownAuthors = {
+            "shakespeare", "dickens", "austen", "tolkien", "rowling", "stephen king",
+            "agatha christie", "mark twain", "hemingway", "orwell",
+            "রবীন্দ্রনাথ", "নজরুল", "হুমায়ূন", "শরৎচন্দ্র"
+        };
+
+        for (String author : knownAuthors) {
+            if (phrase.toLowerCase().contains(author.toLowerCase())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Extract years from the message using regex patterns
+     */
+    private void extractYears(String message, BookSearchCriteria.BookSearchCriteriaBuilder builder) {
+        // Patterns for different year formats
+        java.util.regex.Pattern[] yearPatterns = {
+            java.util.regex.Pattern.compile("\\b(\\d{4})\\s*[-–—to]\\s*(\\d{4})\\b"),  // 1990-2000
+            java.util.regex.Pattern.compile("between\\s+(\\d{4})\\s+and\\s+(\\d{4})"),   // between 1990 and 2000
+            java.util.regex.Pattern.compile("after\\s+(\\d{4})"),                       // after 1990
+            java.util.regex.Pattern.compile("before\\s+(\\d{4})"),                      // before 2000
+            java.util.regex.Pattern.compile("in\\s+(\\d{4})"),                          // in 1995
+            java.util.regex.Pattern.compile("\\b(\\d{4})\\b")                          // standalone year
+        };
+
+        for (java.util.regex.Pattern pattern : yearPatterns) {
+            java.util.regex.Matcher matcher = pattern.matcher(message);
             if (matcher.find()) {
                 if (pattern.pattern().contains("[-–—to]") || pattern.pattern().contains("between")) {
                     // Range pattern
@@ -267,6 +627,9 @@ public class KeywordExtractionServiceImpl implements KeywordExtractionService {
         }
     }
 
+    /**
+     * Extract genres from the message
+     */
     private void extractGenres(String message, BookSearchCriteria.BookSearchCriteriaBuilder builder) {
         Map<String, String[]> genreKeywords = new HashMap<>();
         genreKeywords.put("fiction", new String[]{"fiction", "novel", "story"});
@@ -302,6 +665,9 @@ public class KeywordExtractionServiceImpl implements KeywordExtractionService {
         }
     }
 
+    /**
+     * Extract general keywords from the message
+     */
     private List<String> extractGeneralKeywords(String message) {
         // Remove common stop words and extract meaningful keywords
         String[] stopWords = {
@@ -329,5 +695,62 @@ public class KeywordExtractionServiceImpl implements KeywordExtractionService {
         }
 
         return keywords;
+    }
+
+    /**
+     * Detect whether user wants OR or AND logic for genre searches based on NLP analysis
+     */
+    private String detectGenreSearchOperation(String userMessage) {
+        String message = userMessage.toLowerCase();
+
+        // AND indicators (English)
+        String[] andIndicators = {
+            "both", "and", "with both", "containing all", "must have both",
+            "all of", "include all", "that have all", "with all"
+        };
+
+        // OR indicators (English)
+        String[] orIndicators = {
+            " or ", "either", "any of", "one of", "some of"
+        };
+
+        // Bengali AND indicators
+        String[] bengaliAndIndicators = {
+            "এবং", "আর", "ও", "উভয়", "দুটোই", "সব", "সকল"
+        };
+
+        // Bengali OR indicators
+        String[] bengaliOrIndicators = {
+            "অথবা", "বা", "কিংবা", "যেকোনো", "কোনো একটি"
+        };
+
+        // Check for AND indicators first (more specific)
+        for (String indicator : andIndicators) {
+            if (message.contains(indicator)) {
+                return "AND";
+            }
+        }
+
+        for (String indicator : bengaliAndIndicators) {
+            if (message.contains(indicator)) {
+                return "AND";
+            }
+        }
+
+        // Check for OR indicators
+        for (String indicator : orIndicators) {
+            if (message.contains(indicator)) {
+                return "OR";
+            }
+        }
+
+        for (String indicator : bengaliOrIndicators) {
+            if (message.contains(indicator)) {
+                return "OR";
+            }
+        }
+
+        // Default to OR if no clear indicators found
+        return "OR";
     }
 }
